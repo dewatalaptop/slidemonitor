@@ -13,7 +13,6 @@
             height: 100%;
             overflow: hidden;
             background-color: #000;
-            cursor: pointer; 
         }
 
         #slider-container {
@@ -29,15 +28,11 @@
             position: absolute;
             top: 0;
             left: 0;
-            
-            /* Menggunakan 'contain' agar seluruh gambar pas di layar */
-            background-size: contain; 
+            background-size: cover;
             background-position: center center;
-            background-repeat: no-repeat;
-
             opacity: 0;
             visibility: hidden;
-            transition: all 1s ease-in-out;
+            transition: all 1s ease-in-out; /* Durasi animasi transisi */
         }
 
         /* Transisi FADE */
@@ -58,11 +53,32 @@
         .slide.transition-slide.exiting {
             transform: translateX(-100%);
         }
+
+
+        #fullscreen-btn {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0.5;
+        }
+        #fullscreen-btn:hover {
+            opacity: 1;
+        }
+
+        /* Sembunyikan tombol saat fullscreen */
+        :fullscreen #fullscreen-btn {
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div id="slider-container">
         </div>
+    <button id="fullscreen-btn">Fullscreen</button>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -79,127 +95,100 @@
         };
 
         // Inisialisasi Firebase
-        try {
-            firebase.initializeApp(firebaseConfig);
-            const db = firebase.firestore();
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-            // Referensi
-            const sliderContainer = document.getElementById('slider-container');
-            const docRef = db.collection("settings").doc("sliderConfig");
+        // Referensi
+        const sliderContainer = document.getElementById('slider-container');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const docRef = db.collection("settings").doc("sliderConfig");
 
-            let currentSlideIndex = 0;
-            let slideInterval;
-            let globalConfig = {};
+        let currentSlideIndex = 0;
+        let slideInterval;
+        let globalConfig = {};
 
-            // Fungsi untuk memulai/mereset slider
-            function startSlider(config) {
-                globalConfig = config;
-                currentSlideIndex = 0;
-                
-                if (slideInterval) {
-                    clearInterval(slideInterval);
-                }
-                
-                sliderContainer.innerHTML = '';
-                
-                // Pastikan ada gambar sebelum mencoba memuat
-                if (!config.images || config.images.length === 0) {
-                    console.warn("Tidak ada gambar ditemukan di konfigurasi.");
-                    sliderContainer.innerHTML = '<h1 style="color:white;text-align:center;padding-top:20px;">Tidak ada gambar di panel admin.</h1>';
-                    return; // Berhenti di sini jika tidak ada gambar
-                }
-                
-                config.images.forEach((imgUrl, index) => {
-                    const slideEl = document.createElement('div');
-                    slideEl.classList.add('slide');
-                    slideEl.style.backgroundImage = `url(${imgUrl})`;
-                    sliderContainer.appendChild(slideEl);
-                });
-
-                showSlide(currentSlideIndex);
-                slideInterval = setInterval(nextSlide, config.duration);
+        // Fungsi untuk memulai/mereset slider
+        function startSlider(config) {
+            globalConfig = config;
+            currentSlideIndex = 0;
+            
+            // 1. Hapus interval lama (jika ada)
+            if (slideInterval) {
+                clearInterval(slideInterval);
             }
+            
+            // 2. Hapus slide lama
+            sliderContainer.innerHTML = '';
+            
+            // 3. Buat slide baru
+            config.images.forEach((imgUrl, index) => {
+                const slideEl = document.createElement('div');
+                slideEl.classList.add('slide');
+                slideEl.style.backgroundImage = `url(${imgUrl})`;
+                sliderContainer.appendChild(slideEl);
+            });
 
-            // Fungsi untuk menampilkan slide
-            function showSlide(index) {
-                const slides = document.querySelectorAll('.slide');
-                if (!slides.length) return;
+            // 4. Tampilkan slide pertama
+            showSlide(currentSlideIndex);
 
-                slides.forEach((slide, i) => {
-                    slide.classList.remove('active', 'exiting', 'transition-fade', 'transition-slide');
-                    slide.classList.add(`transition-${globalConfig.transition || 'fade'}`);
-
-                    if (i === index) {
-                        slide.classList.add('active');
-                    } else if (i === (index === 0 ? slides.length - 1 : index - 1) && globalConfig.transition === 'slide') {
-                        slide.classList.add('exiting');
-                    }
-                });
-            }
-
-            // Fungsi untuk ke slide berikutnya
-            function nextSlide() {
-                const slides = document.querySelectorAll('.slide');
-                if (!slides.length) return;
-
-                currentSlideIndex = (currentSlideIndex + 1) % slides.length;
-                showSlide(currentSlideIndex);
-            }
-
-            // --- Logika Fullscreen yang Diperbaiki ---
-            function requestFullScreen() {
-                try {
-                    const elem = document.documentElement;
-                    if (elem.requestFullscreen) {
-                        elem.requestFullscreen();
-                    } else if (elem.mozRequestFullScreen) { // Firefox
-                        elem.mozRequestFullScreen();
-                    } else if (elem.webkitRequestFullscreen) { // Chrome, Safari, Opera
-                        elem.webkitRequestFullscreen();
-                    } else if (elem.msRequestFullscreen) { // IE/Edge
-                        elem.msRequestFullscreen();
-                    }
-                } catch (e) {
-                    console.error("Gagal masuk fullscreen:", e);
-                }
-            }
-
-            // Coba masuk fullscreen pada klik pertama
-            function firstClickGoFullscreen() {
-                console.log("Mencoba masuk fullscreen...");
-                requestFullScreen();
-                // Hapus listener ini setelah dijalankan sekali agar tidak mengganggu
-                document.removeEventListener('click', firstClickGoFullscreen);
-                document.removeEventListener('touchend', firstClickGoFullscreen);
-            }
-
-            document.addEventListener('click', firstClickGoFullscreen);
-            document.addEventListener('touchend', firstClickGoFullscreen);
-            // --- Akhir Logika Fullscreen ---
-
-
-            // Listener REAL-TIME dari Firestore (dijalankan terpisah)
-            docRef.onSnapshot(
-                (doc) => {
-                    if (doc.exists && doc.data()) {
-                        console.log("Data konfigurasi diterima:", doc.data());
-                        startSlider(doc.data());
-                    } else {
-                        console.log("Dokumen 'sliderConfig' tidak ditemukan atau kosong.");
-                        sliderContainer.innerHTML = '<h1 style="color:white;text-align:center;padding-top:20px;">Konfigurasi tidak ditemukan. Buka halaman admin.</h1>';
-                    }
-                },
-                (error) => {
-                    console.error("Error mengambil data:", error);
-                    sliderContainer.innerHTML = '<h1 style="color:white;text-align:center;padding-top:20px;">Error koneksi ke database. Cek Firebase Rules.</h1>';
-                }
-            );
-
-        } catch (e) {
-            // Tangkap error besar, seperti Firebase gagal inisialisasi
-            console.error("Error kritis saat inisialisasi:", e);
-            document.body.innerHTML = `<h1 style="color:white;text-align:center;padding-top:20px;">Error Kritis. Cek firebaseConfig Anda.</h1>`;
+            // 5. Mulai interval baru
+            slideInterval = setInterval(nextSlide, config.duration);
         }
+
+        // Fungsi untuk menampilkan slide
+        function showSlide(index) {
+            const slides = document.querySelectorAll('.slide');
+            if (!slides.length) return;
+
+            slides.forEach((slide, i) => {
+                slide.classList.remove('active', 'exiting', 'transition-fade', 'transition-slide');
+                
+                // Terapkan kelas transisi yang benar
+                slide.classList.add(`transition-${globalConfig.transition || 'fade'}`);
+
+                if (i === index) {
+                    slide.classList.add('active');
+                } else if (i === (index === 0 ? slides.length - 1 : index - 1) && globalConfig.transition === 'slide') {
+                    // Khusus untuk 'slide', tandai slide sebelumnya sebagai 'exiting'
+                    slide.classList.add('exiting');
+                }
+            });
+        }
+
+        // Fungsi untuk ke slide berikutnya
+        function nextSlide() {
+            const slides = document.querySelectorAll('.slide');
+            if (!slides.length) return;
+
+            currentSlideIndex = (currentSlideIndex + 1) % slides.length;
+            showSlide(currentSlideIndex);
+        }
+
+        // Fungsi Fullscreen
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // Listener REAL-TIME dari Firestore
+        docRef.onSnapshot(
+            (doc) => {
+                if (doc.exists) {
+                    console.log("Data konfigurasi diterima:", doc.data());
+                    startSlider(doc.data());
+                } else {
+                    console.log("Dokumen 'sliderConfig' tidak ditemukan!");
+                    sliderContainer.innerHTML = '<h1>Konfigurasi tidak ditemukan</h1>';
+                }
+            },
+            (error) => {
+                console.error("Error mengambil data:", error);
+                sliderContainer.innerHTML = '<h1>Error koneksi ke database</h1>';
+            }
+        );
     </script>
 </body>
 </html>
